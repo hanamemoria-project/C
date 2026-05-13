@@ -80,11 +80,11 @@
         {
             "imports": {
                 "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+                "gsap": "https://unpkg.com/gsap@3.12.5/index.js",
+                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs"
             }
         }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -107,6 +107,7 @@
     <script type="module">
         import * as THREE from 'three';
         import gsap from 'gsap';
+        import { GestureRecognizer, FilesetResolver } from '@mediapipe/tasks-vision';
 
         // --- 1. SETUP THREE.JS (GPU ACCELERATED PARTICLES) ---
         const isMobile = () => window.innerWidth < window.innerHeight;
@@ -134,7 +135,7 @@
 
         const uniforms = {
             uProgress: { value: 0.0 },
-            uColor: { value: new THREE.Color('#e0bfb8') }, // Warna Rose Gold Hana Memoria
+            uColor: { value: new THREE.Color('#e0bfb8') }, 
             uSizeMultiplier: { value: isMobile() ? 14.0 : 12.0 }
         };
 
@@ -231,7 +232,6 @@
         }
 
         // --- 4. MEDIAPIPE GESTURE RECOGNIZER & CAMERA ---
-        const { GestureRecognizer, FilesetResolver } = window;
         let gestureRecognizer;
         const video = document.getElementById('webcam');
         const statusText = document.getElementById('status-text');
@@ -241,13 +241,15 @@
         async function initMediaPipe() {
             startBtn.style.display = 'none';
             statusText.innerText = "Memuat AI Model...";
-            statusIndicator.className = 'dot'; // Reset class
-            statusIndicator.style.backgroundColor = "#ffaa00"; // Kuning loading
+            statusIndicator.className = 'dot'; 
+            statusIndicator.style.backgroundColor = "#ffaa00"; 
 
             try {
+                // Konfigurasi ini memastikan WebAssembly (.wasm) AI ditarik dari CDN yang sama
                 const vision = await FilesetResolver.forVisionTasks(
                     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
                 );
+                
                 gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
@@ -258,7 +260,6 @@
 
                 statusText.innerText = "Meminta Akses Kamera...";
                 
-                // Minta kamera depan secara spesifik
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         facingMode: "user",
@@ -271,14 +272,14 @@
                 video.addEventListener("loadeddata", predictWebcam);
 
                 statusText.innerText = "Sensor Aktif";
-                statusIndicator.style.backgroundColor = ""; // Clear inline style
-                statusIndicator.className = 'dot active'; // Hijau
+                statusIndicator.style.backgroundColor = ""; 
+                statusIndicator.className = 'dot active'; 
 
             } catch (error) {
                 console.error("Kamera/AI Error:", error);
                 statusText.innerText = "Error: " + error.message; 
                 statusIndicator.style.backgroundColor = "";
-                statusIndicator.className = 'dot error'; // Merah
+                statusIndicator.className = 'dot error'; 
                 startBtn.style.display = 'block';
                 startBtn.innerText = "Coba Lagi";
             }
