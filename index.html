@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hana Memoria - AR Particle Sensor</title>
+    <title>Hana Memoria - AR Flow V2</title>
     <style>
         body {
             margin: 0;
@@ -27,7 +27,6 @@
         h1 { margin: 0; font-size: clamp(1.3rem, 5vw, 1.8rem); font-weight: 400; letter-spacing: 3px; }
         p { margin: 5px 0 0 0; font-size: clamp(0.85rem, 3vw, 1rem); opacity: 0.8; font-weight: 300; }
         
-        /* Indikator Status & Tombol */
         #status-bar {
             position: absolute;
             top: 20px;
@@ -65,7 +64,6 @@
         }
         #start-btn:active { opacity: 0.7; }
 
-        /* Video tersembunyi */
         #webcam {
             position: absolute;
             top: 0; left: 0;
@@ -98,7 +96,7 @@
         <h1>HANA MEMORIA</h1>
         <p>Mengabadikan cerita dalam setiap bingkai.</p>
         <p style="margin-top: 15px; font-style: italic; opacity: 0.6; font-size: clamp(0.75rem, 2.5vw, 0.85rem);">
-            (Buka telapak tangan = Bola | Pose "Peace/Victory" = Hati)
+            (✋ Bola | ✌️ Hati 3D | ☝️ Tulip & Tangkai)
         </p>
     </div>
 
@@ -115,7 +113,8 @@
         scene.fog = new THREE.FogExp2(0x0d0d0d, 0.04);
         
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = isMobile() ? 18 : 12;
+        // Jauhkan kamera sedikit di mobile karena Tulip bentuknya tinggi
+        camera.position.z = isMobile() ? 20 : 14;
         
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -127,7 +126,7 @@
         const currentPositions = new Float32Array(particleCount * 3);
         
         for(let i = 0; i < particleCount * 3; i++) {
-            currentPositions[i] = (Math.random() - 0.5) * 20;
+            currentPositions[i] = (Math.random() - 0.5) * 25;
         }
         
         geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
@@ -136,7 +135,7 @@
         const uniforms = {
             uProgress: { value: 0.0 },
             uColor: { value: new THREE.Color('#e0bfb8') }, 
-            uSizeMultiplier: { value: isMobile() ? 14.0 : 12.0 }
+            uSizeMultiplier: { value: isMobile() ? 15.0 : 12.0 }
         };
 
         const vertexShader = `
@@ -163,24 +162,21 @@
         `;
         
         const particleMaterial = new THREE.ShaderMaterial({
-            uniforms: uniforms, 
-            vertexShader, 
-            fragmentShader,
-            transparent: true, 
-            depthWrite: false, 
-            blending: THREE.AdditiveBlending
+            uniforms: uniforms, vertexShader, fragmentShader,
+            transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
         });
         
         const particles = new THREE.Points(geometry, particleMaterial);
         scene.add(particles);
 
-        // --- 2. FUNGSI BENTUK (SPHERE & HEART) ---
+        // --- 2. BENTUK GEOMETRI (SPHERE, 3D HEART, TULIP FRAME) ---
+        
         function getSpherePositions() {
             const arr = new Float32Array(particleCount * 3);
             for(let i = 0; i < particleCount; i++) {
                 const phi = Math.acos(-1 + (2 * i) / particleCount);
                 const theta = Math.sqrt(particleCount * Math.PI) * phi;
-                const r = 4.5; 
+                const r = 5.0; 
                 arr[i*3] = r * Math.cos(theta) * Math.sin(phi);
                 arr[i*3+1] = r * Math.sin(theta) * Math.sin(phi);
                 arr[i*3+2] = r * Math.cos(phi);
@@ -188,17 +184,112 @@
             return arr;
         }
 
+        // PEMBARUAN: Hati parametrik 3D bervolume (permukaan cembung)
         function getHeartPositions() {
             const arr = new Float32Array(particleCount * 3);
             for(let i = 0; i < particleCount; i++) {
-                const t = Math.random() * Math.PI * 2;
-                const r = Math.sqrt(Math.random()) * 0.5; 
-                const x = 16 * Math.pow(Math.sin(t), 3);
-                const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
-                arr[i*3] = (x * 0.28) + (Math.random() - 0.5) * r;
-                arr[i*3+1] = (y * 0.28) + (Math.random() - 0.5) * r + 1; 
-                arr[i*3+2] = (Math.random() - 0.5) * 2.0; 
+                // Sudut shell parametrik
+                const t = Math.random() * Math.PI * 2; // Mengelilingi outline
+                const v = Math.random() * Math.PI - Math.PI / 2; // Kedalaman cembung
+
+                // Skala outline hati dasar
+                const scale = 0.3;
+                // Ketebalan maksimum volume 3D
+                const baseDepth = 2.8; 
+
+                // Persamaan cangkang jantung parametrik
+                const shellX = 16 * Math.pow(Math.sin(t), 3);
+                const shellY = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                
+                // Distribusi partikel agar cembung di tengah
+                const depthTaper = Math.cos(v); // Menipis di pinggir outline
+
+                // Transformasi ke Z untuk kedalaman volumetrik
+                arr[i*3] = (shellX * scale) * depthTaper; 
+                arr[i*3+1] = (shellY * scale) * depthTaper + 2.0; // Geser sedikit ke atas
+                arr[i*3+2] = baseDepth * Math.sin(v); // Kedalaman Z
+
+                // Noise kecil untuk mengisi volume sedikit
+                const noise = 0.15;
+                arr[i*3] += (Math.random()-0.5)*noise;
+                arr[i*3+1] += (Math.random()-0.5)*noise;
+                arr[i*3+2] += (Math.random()-0.5)*noise;
             }
+            return arr;
+        }
+
+        // BENTUK BARU: Bunga Tulip parametrik dengan Tangkai & Daun
+        function getTulipPositions() {
+            const arr = new Float32Array(particleCount * 3);
+            
+            // Distribusi partikel: 60% Bunga, 25% Tangkai, 15% Daun
+            const petalCount = Math.floor(particleCount * 0.6);
+            const stemCount = Math.floor(particleCount * 0.25);
+            const leafCount = particleCount - petalCount - stemCount;
+
+            const tulipScale = 4.0;
+            const stemLength = 8.0;
+            const baseOffset = -2.0; // Posisi vertikal Tulip
+
+            // 1. Kelopak Bunga (Bentuk Cangkir/Cup parametrik)
+            for(let i = 0; i < petalCount; i++) {
+                const u = Math.random(); // Tinggi 0 ke 1 di dalam bunga
+                const theta = Math.random() * Math.PI * 2; // Mengelilingi bunga
+                
+                // Rumus kelopak menguncup
+                const radius = (u * 0.7 + 0.3) * Math.sin(Math.pow(u, 0.5) * Math.PI);
+                // Membuat bingkai luar bunga
+                const petalOutline = (1 + 0.15 * Math.sin(theta * 6)) * 1.5; 
+
+                arr[i*3] = radius * Math.cos(theta) * tulipScale * petalOutline;
+                arr[i*3+1] = (u * 3) * tulipScale + baseOffset; // Tinggi Y bunga
+                arr[i*3+2] = radius * Math.sin(theta) * tulipScale * petalOutline;
+            }
+
+            // 2. Tangkai (Garis lurus vertikal bervolume tipis)
+            for(let i = 0; i < stemCount; i++) {
+                const h = Math.random();
+                const stemNoise = 0.12;
+                arr[(petalCount + i)*3] = (Math.random()-0.5)*stemNoise;
+                arr[(petalCount + i)*3+1] = -h * stemLength + baseOffset; // Mengarah ke bawah
+                arr[(petalCount + i)*3+2] = (Math.random()-0.5)*stemNoise;
+            }
+
+            // 3. Daun (Bentuk oval parametrik di sisi tangkai)
+            for(let i = 0; i < leafCount; i++) {
+                const u = Math.random(); // Posisi di sepanjang panjang daun
+                const isLeft = i < leafCount / 2;
+                
+                // Parameter daun
+                const leafLen = 3.5;
+                const leafWidth = 1.0;
+                const attachHeight = -stemLength * (isLeft ? 0.35 : 0.6) + baseOffset;
+                
+                const px = u * leafLen; 
+                const py = Math.sin(u * Math.PI) * leafWidth; // Ketebalan daun oval
+
+                // Kemiringan daun ke atas
+                const angleUp = -0.4; // Radian (sekitar 23 derajat menengadah)
+
+                // simplified 3D rotation/translation untuk daun
+                const x = px;
+                const y = py;
+                const z = (Math.random()-0.5)*0.2; // Ketebalan Z tipis
+
+                // Apply kemiringan menengadah
+                const finalX = (x * Math.cos(angleUp) - y * Math.sin(angleUp));
+                const finalY = (x * Math.sin(angleUp) + y * Math.cos(angleUp)) + attachHeight;
+
+                arr[(petalCount + stemCount + i)*3] = finalX * (isLeft ? 1 : -1); 
+                arr[(petalCount + stemCount + i)*3+1] = finalY;
+                arr[(petalCount + stemCount + i)*3+2] = z + (Math.random()-0.5)*0.05;
+            }
+            
+            // Tambahkan kedalaman Z acak global agar frame tidak rata
+            for(let i = 0; i < particleCount; i++) {
+                 arr[i*3+2] += (Math.random()-0.5)*0.1;
+            }
+
             return arr;
         }
 
@@ -225,13 +316,13 @@
             gsap.killTweensOf(uniforms.uProgress); 
             gsap.to(uniforms.uProgress, {
                 value: 1.0,
-                duration: 2.0,
+                duration: 2.2, // Transisi sedikit lebih lambat agar dramatis
                 ease: "expo.inOut",
                 onComplete: () => { isAnimating = false; }
             });
         }
 
-        // --- 4. MEDIAPIPE GESTURE RECOGNIZER & CAMERA ---
+        // --- 4. MEDIAPIPE & CAMERA SETUP (Tidak berubah berat, hanya nambah gestur) ---
         let gestureRecognizer;
         const video = document.getElementById('webcam');
         const statusText = document.getElementById('status-text');
@@ -245,7 +336,6 @@
             statusIndicator.style.backgroundColor = "#ffaa00"; 
 
             try {
-                // Konfigurasi ini memastikan WebAssembly (.wasm) AI ditarik dari CDN yang sama
                 const vision = await FilesetResolver.forVisionTasks(
                     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
                 );
@@ -261,11 +351,7 @@
                 statusText.innerText = "Meminta Akses Kamera...";
                 
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: "user",
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    } 
+                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } 
                 });
                 
                 video.srcObject = stream;
@@ -276,9 +362,8 @@
                 statusIndicator.className = 'dot active'; 
 
             } catch (error) {
-                console.error("Kamera/AI Error:", error);
+                console.error("Error:", error);
                 statusText.innerText = "Error: " + error.message; 
-                statusIndicator.style.backgroundColor = "";
                 statusIndicator.className = 'dot error'; 
                 startBtn.style.display = 'block';
                 startBtn.innerText = "Coba Lagi";
@@ -287,7 +372,6 @@
 
         startBtn.addEventListener('click', initMediaPipe);
 
-        // --- 5. LOOP DETEKSI GESTUR ---
         let lastVideoTime = -1;
         function predictWebcam() {
             if (video.currentTime !== lastVideoTime) {
@@ -298,24 +382,29 @@
                 if (results.gestures.length > 0) {
                     const categoryName = results.gestures[0][0].categoryName;
                     
+                    // PEMBARUAN: Logika Pemetaan Gestur Baru
                     if (categoryName === "Open_Palm") {
                         updateGestureTarget(getSpherePositions(), 'sphere');
                     } 
                     else if (categoryName === "Victory" || categoryName === "ILoveYou") {
                         updateGestureTarget(getHeartPositions(), 'heart');
                     }
+                    // GESTUR BARU: Menunjuk ke atas -> Tulip
+                    else if (categoryName === "Pointing_Up") {
+                        updateGestureTarget(getTulipPositions(), 'tulip');
+                    }
                 }
             }
             requestAnimationFrame(predictWebcam);
         }
 
-        // --- 6. INISIALISASI & RENDER LOOP ---
-        setTimeout(() => { updateGestureTarget(getSpherePositions(), 'sphere'); isAnimating = false; }, 300);
+        // --- 5. RENDER LOOP ---
+        setTimeout(() => updateGestureTarget(getSpherePositions(), 'sphere'), 300);
         
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
-            camera.position.z = isMobile() ? 18 : 12;
-            uniforms.uSizeMultiplier.value = isMobile() ? 14.0 : 12.0;
+            camera.position.z = isMobile() ? 20 : 14; // Perbarui jarak kamera
+            uniforms.uSizeMultiplier.value = isMobile() ? 15.0 : 12.0;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
@@ -323,10 +412,9 @@
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            particles.rotation.y = clock.getElapsedTime() * 0.15;
+            particles.rotation.y = clock.getElapsedTime() * 0.12;
             renderer.render(scene, camera);
         }
-
         animate();
 
     </script>
