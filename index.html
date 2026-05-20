@@ -67,7 +67,7 @@
         }
         #start-btn:active { opacity: 0.7; }
 
-        /* ================== UI KARTU PESAN ================== */
+        /* ================== UI KARTU PESAN (UPDATED) ================== */
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #0d0d0d; display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -78,20 +78,23 @@
         #message-card {
             position: absolute; top: 45%; left: 50%; 
             transform: translate3d(-50%, -40%, 0);
-            width: 320px; background: rgba(25, 25, 30, 0.95);
-            border: 1px solid rgba(224, 191, 184, 0.3); border-radius: 15px;
+            width: 320px; 
+            /* Transparansi Kaca (Glassmorphism) */
+            background: rgba(20, 20, 25, 0.15); 
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            border: 1px solid rgba(224, 191, 184, 0.2); 
+            border-radius: 15px;
             padding: 30px; text-align: center; color: white;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
             opacity: 0; pointer-events: none; 
             transition: opacity 1s ease-out, transform 1s ease-out; z-index: 150;
         }
         #message-card.show { opacity: 1; transform: translate3d(-50%, -50%, 0); pointer-events: auto; }
         
         #card-text-wrapper { transition: opacity 0.3s ease; }
-        #message-card h3 { color: #e0bfb8; font-family: 'Playfair Display', serif; font-size: 22px; margin-top: 0; margin-bottom: 12px; font-weight: 600; font-style: italic; }
-        #message-card p { font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 300; line-height: 1.7; margin-bottom: 25px; color: rgba(255,255,255,0.9);}
-        
-        .btn-utama { background: #e0bfb8; font-family: 'Poppins', sans-serif; border: none; padding: 12px 20px; border-radius: 50px; color: #0d0d0d; font-weight: 600; width: 100%; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.85; pointer-events: none;}
+        #message-card h3 { color: #e0bfb8; font-family: 'Playfair Display', serif; font-size: 24px; margin-top: 0; margin-bottom: 15px; font-weight: 600; font-style: italic; text-shadow: 0 2px 5px rgba(0,0,0,0.5);}
+        #message-card p { font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 300; line-height: 1.7; margin-bottom: 5px; color: rgba(255,255,255,0.95); text-shadow: 0 1px 3px rgba(0,0,0,0.5);}
         
         /* ================== UI PEMINDAI AR (MINDAR) ================== */
         #mindar-overlay-container {
@@ -359,7 +362,6 @@
             <h3 id="card-title">Memuat...</h3>
             <p id="card-desc">Tunggu sebentar...</p>
         </div>
-        <button class="btn-utama" id="btn-next">Gunakan Sensor Tangan</button>
     </div>
 
     <div id="mindar-overlay-container">
@@ -484,16 +486,21 @@
         let isAnimating = false; 
         let isProcessingAI = false;
 
-        // Kumpulan bentuk yang akan berganti di setiap slide secara berkala
         const shapesPool = ['singularity', 'heart', 'tulip', 'frame'];
         
-        // Pilihan daftar gerakan tangan terdaftar yang digunakan secara bergantian untuk navigasi
         const sequenceGestures = [
             { req: 'fist', text: '✊ (Genggam)' },
             { req: 'peace', text: '✌️ (Peace / 2 Jari)' },
             { req: 'index', text: '☝️ (Satu Jari Telunjuk)' },
             { req: 'open_palm', text: '🖐️ (Telapak Terbuka)' },
             { req: 'thumb_up', text: '👍 (Jempol)' }
+        ];
+
+        // --- PESAN DEFAULT UNIVERSAL ---
+        const UNIVERSAL_SLIDES = [
+            { t: "Hana Memoria ✨", b: "Setiap bingkai menyimpan cerita. Tunjukkan tanganmu untuk membuka lembaran memori ini." },
+            { t: "Melintasi Waktu 🕰️", b: "Waktu mungkin berlalu, namun kenangan indah akan selalu menemukan jalannya untuk kembali." },
+            { t: "Keajaiban Menanti 🌸", b: "Arahkan kamera ke foto fisikmu, dan saksikan momen tersebut hidup kembali di hadapanmu." }
         ];
 
         const statusText = document.getElementById('status-text');
@@ -505,29 +512,18 @@
 
         const DEMO_DATA = {
             nama_pelanggan: "Demo Hana Memoria",
-            nama_paket: "Paket Demo",
-            tanggal_acara: "2025-01-01",
-            slides: JSON.stringify([
-                { t: "Hana Memoria ✨", b: "Selamat datang di lembaran cerita baru kita. Tunjukkan tanganmu untuk membacanya." },
-                { t: "Setiap Detik Berharga 🎀", b: "Bersamamu adalah petualangan terbaik dalam hidupku." },
-                { t: "Menatap Masa Depan", b: "Ayo buka kejutan terakhir yang telah disiapkan khusus di halaman ini." }
-            ]),
             link_video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
             link_target: "https://pub-02d853231cff4efa92ee6754c646a898.r2.dev/targets.mind",
             video_posisi: "0 0 0",
             video_skala: "1 1.5 1",
-            video_rotasi: "0 0 0",
-            pesan_teks: "Ini adalah pesan demo dari Hana Memoria 💕",
-            nomor_wa: "6281234567890"
+            video_rotasi: "0 0 0"
         };
 
         window.onload = async () => {
             if (idPelanggan === 'demo') {
                 const data = DEMO_DATA;
                 initMascotData(data);
-                let rawSlides = data.slides;
-                try { if (typeof rawSlides === 'string') rawSlides = JSON.parse(rawSlides); } catch(e) {}
-                slides = Array.isArray(rawSlides) ? rawSlides : [{ t: "Demo", b: "Mode uji coba aktif." }];
+                slides = UNIVERSAL_SLIDES; // Gunakan slide universal untuk demo
 
                 const p = (data.video_posisi || "0 0 0").split(' ');
                 const s = (data.video_skala || "1 1.5 1").split(' ');
@@ -560,11 +556,14 @@
                         initMascotData(data);
                         let rawSlides = data.slides;
                         try { if (typeof rawSlides === 'string') rawSlides = JSON.parse(rawSlides); } catch(e) {}
+                        
+                        // Cek jika data khusus tersedia, jika tidak pakai UNIVERSAL
                         if (Array.isArray(rawSlides) && rawSlides.length > 0 && rawSlides[0].t) {
                             slides = rawSlides;
                         } else {
-                            slides = [{ "t": "Hana Memoria ✨", "b": "Kenangan manis ini dihidupkan kembali khusus untukmu." }];
+                            slides = UNIVERSAL_SLIDES;
                         }
+
                         const p = (data.video_posisi || "0 0 0").split(' ');
                         const s = (data.video_skala || "1 1.5 1").split(' ');
                         const rotZ = parseFloat((data.video_rotasi || "0 0 0").split(' ')[2]);
@@ -681,28 +680,23 @@
                 document.getElementById('card-title').innerText = slides[slideIndex].t || "Hana Memoria";
                 document.getElementById('card-desc').innerText = slides[slideIndex].b || "...";
                 
-                // Set instruksi gestur dinamis di tombol utama penunjuk
                 const currentGestureObj = sequenceGestures[slideIndex % sequenceGestures.length];
-                document.getElementById('btn-next').innerHTML = `Tunjukkan Tangan: <span>${currentGestureObj.text}</span>`;
                 
+                // Panduan Gestur sekarang HANYA ada di pojok kiri bawah
                 if (mpCameraInstance) {
-                    hintEl.innerHTML = `Pesan ke-${slideIndex + 1}. Gerakkan tangan: <span>${currentGestureObj.text}</span>`;
+                    hintEl.innerHTML = `Langkah ${slideIndex + 1}/${slides.length}. Tunjukkan: <span>${currentGestureObj.text}</span>`;
                 }
             }
         }
 
-        // Fungsi pemicu perpindahan halaman pesan berbasis gestur tangan
         function advanceMessageFlow() {
             if (isAnimating) return;
 
             const card = document.getElementById('message-card');
             const wrapper = document.getElementById('card-text-wrapper');
 
-            // Jika masih ada slide berikutnya
             if (slideIndex < slides.length - 1) {
                 wrapper.style.opacity = 0;
-                
-                // Tentukan pola 3D selanjutnya secara bergantian dari kolam bentuk
                 const nextShape = shapesPool[(slideIndex + 1) % shapesPool.length];
                 
                 transitionPattern(nextShape, () => {
@@ -711,21 +705,18 @@
                     wrapper.style.opacity = 1;
                 });
             } else {
-                // JIKA SLIDE TERAKHIR SELESAI -> Masuk Fase Transisi AR Utama
                 wrapper.style.opacity = 0;
-                document.getElementById('btn-next').innerText = "MEMBUKA SCANNER...";
+                document.getElementById('card-title').innerText = "Membuka Pemindai...";
+                document.getElementById('card-desc').innerText = "Bersiaplah untuk keajaiban AR.";
+                wrapper.style.opacity = 1;
                 
-                // Berubah menjadi pola terakhir: Amplop Terbuka
                 transitionPattern('openEnvelope', () => {
                     card.classList.remove('show');
                     
-                    // Matikan AI Hand Tracking pelacak tangan agar hemat daya & membebaskan kamera kamera
                     if (mpCameraInstance) {
                         try { mpCameraInstance.stop(); } catch(e){}
                     }
                     document.getElementById('main-hand-ui').style.display = 'none';
-                    
-                    // Alihkan menuju kamera AR MindAR
                     startMindAR();
                 });
             }
@@ -818,7 +809,6 @@
                 const isThumbUp = isThumbOpen && !isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen;
                 const isPinch = pinchDist < 0.10 && !isFist;
 
-                // Ambil target gestur yang dibutuhkan untuk slide aktif saat ini
                 const currentGestureNeeded = sequenceGestures[slideIndex % sequenceGestures.length].req;
                 let matchTarget = false;
 
@@ -833,7 +823,7 @@
                     consecutiveGestures++;
                     if (consecutiveGestures >= 3) {
                         consecutiveGestures = 0;
-                        advanceMessageFlow(); // Pindah slide otomatis lewat sensor tangan!
+                        advanceMessageFlow();
                     }
                 } else {
                     consecutiveGestures = 0;
@@ -854,7 +844,7 @@
             }
         }
 
-        // ============ FORMULA MATEMATIKA BENTUK PARTIKEL TIGA JS ============
+        // ============ FORMULA MATEMATIKA BENTUK PARTIKEL ============
         function randomTriangle(arr, startIdx, count, a, b, c, zNoise=0.0) {
             let idx = startIdx * 3;
             for(let i=0; i<count; i++) {
@@ -994,9 +984,7 @@
         function initMascotData(data) {
             let raw = data.slides;
             try { if(typeof raw === 'string') raw = JSON.parse(raw); } catch(e) {}
-            arSlides = (Array.isArray(raw) && raw.length > 0 && raw[0].t) ? raw : [
-                { t: 'Hana Memoria ✨', b: 'Kenangan manis ini dihidupkan kembali khusus untukmu.' }
-            ];
+            arSlides = (Array.isArray(raw) && raw.length > 0 && raw[0].t) ? raw : UNIVERSAL_SLIDES;
             arSlideIdx = 0;
             arVideoSrc = data.link_video || null;
             const v = document.getElementById('ar-video-el');
