@@ -3,420 +3,1118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hana Memoria - AR Flow V2</title>
+    <title>Hana Memoria</title>
+    
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,500;1,600&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background-color: #0d0d0d;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Poppins', sans-serif;
             user-select: none;
             -webkit-user-select: none;
             touch-action: none;
+            color: #e0bfb8;
+        }
+        canvas { display: block; }
+        
+        /* ================== UI PELACAK TANGAN ================== */
+        #main-hand-ui {
+            position: fixed; inset: 0; z-index: 100;
+            display: none;
         }
         
         #ui-layer {
-            position: absolute;
-            bottom: 5vh;
-            left: 5vw;
-            right: 5vw;
-            color: #e0bfb8;
+            position: absolute; bottom: 5vh; left: 5vw; right: 5vw;
             pointer-events: none;
-            z-index: 10;
         }
-        h1 { margin: 0; font-size: clamp(1.3rem, 5vw, 1.8rem); font-weight: 400; letter-spacing: 3px; }
-        p { margin: 5px 0 0 0; font-size: clamp(0.85rem, 3vw, 1rem); opacity: 0.8; font-weight: 300; }
+        #ui-layer h1 { margin: 0; font-size: clamp(1.3rem, 5vw, 1.8rem); font-weight: 400; letter-spacing: 3px; font-family: 'Playfair Display', serif; }
+        #ui-layer p.tagline { margin: 5px 0 0 0; font-size: clamp(0.85rem, 3vw, 1rem); opacity: 0.8; font-weight: 300; }
+        
+        #gesture-hint {
+            margin-top: 15px; padding: 8px 15px; display: inline-block;
+            background: rgba(224, 191, 184, 0.1); border-left: 3px solid #d8a07c;
+            border-radius: 4px; font-style: italic; font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+            color: #e0bfb8; backdrop-filter: blur(5px); transition: all 0.3s ease;
+        }
+        #gesture-hint span { color: #d8a07c; font-weight: 600; font-style: normal; }
         
         #status-bar {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(224, 191, 184, 0.1);
-            border: 1px solid rgba(224, 191, 184, 0.3);
-            color: #e0bfb8;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            backdrop-filter: blur(5px);
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(224, 191, 184, 0.1); border: 1px solid rgba(224, 191, 184, 0.3);
+            padding: 8px 15px; border-radius: 20px; font-size: 0.85rem;
+            backdrop-filter: blur(5px); display: flex; align-items: center; gap: 10px;
         }
-        .dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background-color: #ffaa00; 
-            box-shadow: 0 0 8px currentColor;
-        }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background-color: #ffaa00; box-shadow: 0 0 8px currentColor; }
         .dot.active { background-color: #00ffaa; }
         .dot.error { background-color: #ff0044; }
 
         #start-btn {
-            background: #e0bfb8;
-            color: #0d0d0d;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: opacity 0.2s;
+            background: #e0bfb8; color: #0d0d0d; border: none; padding: 6px 12px;
+            border-radius: 15px; font-weight: bold; cursor: pointer; font-size: 0.8rem;
+            transition: opacity 0.2s; font-family: 'Poppins', sans-serif; pointer-events: auto;
         }
         #start-btn:active { opacity: 0.7; }
 
-        #webcam {
+        /* ================== UI KARTU PESAN ================== */
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0d0d0d; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 18px; font-weight: 200; letter-spacing: 2px; z-index: 2000; transition: opacity 0.5s; text-align: center;
+        }
+        #loading.fade-out { opacity: 0; pointer-events: none; }
+
+        #message-card {
+            position: absolute; top: 45%; left: 50%; 
+            transform: translate3d(-50%, -40%, 0);
+            width: 320px; background: rgba(25, 25, 30, 0.95);
+            border: 1px solid rgba(224, 191, 184, 0.3); border-radius: 15px;
+            padding: 30px; text-align: center; color: white;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            opacity: 0; pointer-events: none; 
+            transition: opacity 1s ease-out, transform 1s ease-out; z-index: 150;
+        }
+        #message-card.show { opacity: 1; transform: translate3d(-50%, -50%, 0); pointer-events: auto; }
+        
+        #card-text-wrapper { transition: opacity 0.3s ease; }
+        #message-card h3 { color: #e0bfb8; font-family: 'Playfair Display', serif; font-size: 22px; margin-top: 0; margin-bottom: 12px; font-weight: 600; font-style: italic; }
+        #message-card p { font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 300; line-height: 1.7; margin-bottom: 25px; color: rgba(255,255,255,0.9);}
+        
+        .btn-utama { background: #e0bfb8; font-family: 'Poppins', sans-serif; border: none; padding: 12px 20px; border-radius: 50px; color: #0d0d0d; font-weight: 600; width: 100%; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.85; pointer-events: none;}
+        
+        /* ================== UI PEMINDAI AR (MINDAR) ================== */
+        #mindar-overlay-container {
+            position: fixed; inset: 0; z-index: 1000;
+            display: none; background: transparent;
+        }
+        #mindar-overlay-container.active { display: block; }
+        
+        #ar-scene-target-container {
+            position: absolute; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            overflow: hidden;
+        }
+
+        #tutorial-overlay { position: fixed; inset: 0; z-index: 1500; display: none; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.3); color: white; backdrop-filter: blur(2px); pointer-events: none; }
+        #tutorial-overlay * { pointer-events: none; }
+        #preview-mascot-btn { pointer-events: auto !important; }
+        .tutorial-logo-container { position: relative; width: 160px; height: 160px; display: flex; justify-content: center; align-items: center; animation: pulseLogo 3.0s ease-in-out infinite; margin-bottom: 40px; }
+        .tutorial-logo { width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 0 10px rgba(255,255,255,0.5)); }
+        @keyframes pulseLogo { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        .scan-line-logo { position: absolute; top: 0%; left: 0%; right: 0%; height: 3px; background: #e0bfb8; box-shadow: 0 0 15px #e0bfb8; animation: scanUpDownLogo 2.5s ease-in-out infinite; border-radius: 50%; z-index: 2; }
+        @keyframes scanUpDownLogo { 0% { top: 0%; opacity: 0; } 15% { opacity: 1; } 50% { top: 100%; } 85% { opacity: 1; } 100% { top: 0%; opacity: 0; } }
+        .tutorial-text h3 { font-family: 'Playfair Display', serif; font-weight: 600; font-size: 21px; margin: 0 0 10px 0; letter-spacing: 1px; color: #fff;}
+        .tutorial-text p { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 13px; color: rgba(255, 255, 255, 0.9); margin: 0; line-height: 1.7;}
+
+        @media (max-width: 600px) { #message-card { width: 80%; padding: 25px; } }
+
+        /* ================== MASKOT AR OVERLAY ================== */
+        #ar-mascot-stage {
+            position: fixed; inset: 0; z-index: 9999;
+            display: none; pointer-events: none;
+            background: transparent;
+        }
+        #ar-mascot-stage.active { display: block; }
+
+        #ar-mascot-stage.preview-mode {
+            background: radial-gradient(ellipse at center 70%, rgba(120,50,40,0.6) 0%, rgba(10,8,14,0.97) 100%);
+            pointer-events: auto;
+        }
+
+        #mascot-wrap {
             position: absolute;
-            top: 0; left: 0;
-            width: 100px; height: auto;
+            bottom: 22%; left: 50%;
+            transform: translateX(-50%);
+            display: flex; flex-direction: column; align-items: center;
+            pointer-events: auto;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #mascot-img {
+            width: clamp(100px, 28vw, 140px);
+            filter: drop-shadow(0 12px 28px rgba(240,180,160,0.55));
+            animation: mascotIdle 3.2s ease-in-out infinite;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #mascot-img:active { transform: scale(0.92); }
+
+        @keyframes mascotIdle {
+            0%, 100% { transform: translateY(0px) rotate(-1deg); }
+            30%       { transform: translateY(-8px) rotate(0.5deg); }
+            60%       { transform: translateY(-4px) rotate(-0.5deg); }
+        }
+
+        #mascot-heart-btn {
+            position: absolute;
+            top: 52%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: clamp(34px, 9vw, 44px);
+            height: clamp(34px, 9vw, 44px);
+            background: radial-gradient(circle at 40% 35%, #fff9f0, #ffcdb2);
+            border: none; border-radius: 50%;
+            cursor: pointer; pointer-events: auto;
+            display: flex; align-items: center; justify-content: center;
+            font-size: clamp(16px, 4.5vw, 22px);
+            box-shadow: 0 0 0 0 rgba(255,180,140,0.7);
+            animation: heartPulse 2s ease-in-out infinite;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.15s ease;
+            z-index: 2;
+        }
+        #mascot-heart-btn:active { transform: translate(-50%,-50%) scale(0.88); }
+
+        @keyframes heartPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,180,140,0.7), 0 0 14px 4px rgba(255,210,180,0.4); }
+            50%       { box-shadow: 0 0 0 10px rgba(255,180,140,0), 0 0 22px 8px rgba(255,210,180,0.6); }
+        }
+
+        #speech-bubble {
+            position: absolute;
+            bottom: calc(100% + 14px);
+            left: 50%; transform: translateX(-50%) scale(0.8);
+            width: clamp(200px, 72vw, 290px);
+            background: rgba(255,250,248,0.97);
+            border-radius: 20px;
+            padding: 14px 18px 16px;
+            box-shadow: 0 8px 32px rgba(200,140,120,0.22), 0 2px 8px rgba(0,0,0,0.08);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+            text-align: center;
+        }
+        #speech-bubble.show {
+            opacity: 1; transform: translateX(-50%) scale(1);
+            pointer-events: auto;
+        }
+        #speech-bubble::after {
+            content: '';
+            position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
+            border-left: 10px solid transparent; border-right: 10px solid transparent;
+            border-top: 11px solid rgba(255,250,248,0.97);
+        }
+        #bubble-slide-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(13px, 3.8vw, 16px); font-weight: 600; font-style: italic;
+            color: #c07060; margin: 0 0 6px; line-height: 1.3;
+        }
+        #bubble-slide-body {
+            font-family: 'Poppins', sans-serif;
+            font-size: clamp(11px, 3.2vw, 13px); font-weight: 400; color: #5a4040;
+            line-height: 1.6; margin: 0 0 12px;
+        }
+        #bubble-next-btn {
+            background: linear-gradient(135deg, #f4a99a, #e07060);
+            border: none; border-radius: 50px; padding: 8px 20px;
+            color: #fff; font-family: 'Poppins', sans-serif;
+            font-size: 11px; font-weight: 600; letter-spacing: 0.8px;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+            transition: transform 0.15s, opacity 0.15s;
+        }
+        #bubble-next-btn:active { transform: scale(0.92); opacity: 0.85; }
+
+        #video-panel {
+            position: absolute;
+            top: 6%; left: 50%; transform: translateX(-50%) translateY(-20px);
+            width: clamp(200px, 78vw, 340px);
+            background: rgba(15,12,18,0.92);
+            border: 1.5px solid rgba(240,190,170,0.3);
+            border-radius: 20px; overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.34,1.2,0.64,1);
+        }
+        #video-panel.show {
+            opacity: 1; transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+        #video-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.04);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        #video-panel-header span {
+            font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 500;
+            color: rgba(240,190,170,0.9); letter-spacing: 0.5px;
+        }
+        #video-panel-close {
+            background: none; border: none; color: rgba(255,255,255,0.4);
+            font-size: 18px; cursor: pointer; line-height: 1; padding: 0 2px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #video-panel video {
+            width: 100%; display: block;
+            aspect-ratio: 16/9; background: #000;
+        }
+
+        .deco-particle {
+            position: absolute; pointer-events: none;
+            font-size: clamp(12px, 3.5vw, 18px);
+            animation: decoFloat linear infinite;
             opacity: 0;
-            pointer-events: none;
+            user-select: none;
         }
+        @keyframes decoFloat {
+            0%   { transform: translateY(0) rotate(0deg) scale(0.8); opacity: 0; }
+            10%  { opacity: 0.7; }
+            85%  { opacity: 0.5; }
+            100% { transform: translateY(-65vh) rotate(360deg) scale(1.1); opacity: 0; }
+        }
+
+        @keyframes mascotEntrance {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(40px) scale(0.7); }
+            70%  { transform: translateX(-50%) translateY(-6px) scale(1.04); }
+            100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
+        #mascot-wrap { opacity: 0; }
+        #mascot-wrap.entered { animation: mascotEntrance 0.7s cubic-bezier(0.34,1.2,0.64,1) forwards; }
+
+        #mascot-tap-hint {
+            margin-top: 8px;
+            font-family: 'Poppins', sans-serif; font-size: 10px;
+            color: rgba(255,255,255,0.55); letter-spacing: 0.5px;
+            animation: hintBlink 2s ease-in-out infinite;
+        }
+        @keyframes hintBlink { 0%,100%{opacity:0.55} 50%{opacity:0.2} }
+        #mascot-tap-hint.hidden { display: none; }
+
+        #preview-mascot-btn {
+            position: absolute; bottom: 28px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.12);
+            border: 1.5px solid rgba(255,255,255,0.25);
+            border-radius: 50px; padding: 8px 18px 8px 10px;
+            color: #fff; font-family: 'Poppins', sans-serif;
+            font-size: 12px; font-weight: 500; letter-spacing: 0.3px;
+            cursor: pointer; backdrop-filter: blur(8px);
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.2s, transform 0.15s;
+            white-space: nowrap;
+        }
+        #preview-mascot-btn:active { transform: translateX(-50%) scale(0.93); }
+        #preview-mascot-btn img {
+            width: 28px; height: 28px; object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(240,160,140,0.5));
+            animation: mascotBtnBob 2s ease-in-out infinite;
+        }
+        @keyframes mascotBtnBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+
+        #preview-close-btn {
+            position: absolute; top: 18px; right: 18px;
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%; width: 36px; height: 36px;
+            color: rgba(255,255,255,0.7); font-size: 18px; line-height: 1;
+            display: none; align-items: center; justify-content: center;
+            cursor: pointer; backdrop-filter: blur(6px);
+            -webkit-tap-highlight-color: transparent;
+            pointer-events: auto;
+        }
+        #ar-mascot-stage.preview-mode #preview-close-btn { display: flex; }
+
+        #preview-label {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            font-family: 'Poppins', sans-serif; font-size: 10px; font-weight: 500;
+            color: rgba(255,200,180,0.5); letter-spacing: 2px; text-transform: uppercase;
+            pointer-events: none; opacity: 0; transition: opacity 0.4s; white-space: nowrap;
+        }
+        #ar-mascot-stage.preview-mode #preview-label { opacity: 1; }
     </style>
-    
-    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "gsap": "https://unpkg.com/gsap@3.12.5/index.js",
-                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs"
-            }
-        }
-    </script>
 </head>
 <body>
 
-    <div id="status-bar">
-        <div class="dot" id="status-indicator"></div>
-        <span id="status-text">Menunggu Izin Kamera</span>
-        <button id="start-btn">Aktifkan Sensor</button>
+    <div id="loading">Menyiapkan Memori...<br><span style="font-size: 12px; opacity: 0.5; margin-top: 10px; display: block;" id="loading-sub">Menghubungkan ke server</span></div>
+
+    <div id="main-hand-ui">
+        <div id="status-bar">
+            <div class="dot" id="status-indicator"></div>
+            <span id="status-text">Menunggu Gestur...</span>
+            <button id="start-btn">Aktifkan Sensor</button>
+        </div>
+
+        <div id="ui-layer">
+            <h1>HANA MEMORIA</h1>
+            <p id="tagline-hand" class="tagline">Mengabadikan cerita dalam setiap bingkai.</p>
+            <div id="gesture-hint">Klik tombol "Aktifkan Sensor" di atas...</div>
+        </div>
+        
+        <video id="webcam" autoplay playsinline muted style="display: none;"></video>
     </div>
 
-    <div id="ui-layer">
-        <h1>HANA MEMORIA</h1>
-        <p>Mengabadikan cerita dalam setiap bingkai.</p>
-        <p style="margin-top: 15px; font-style: italic; opacity: 0.6; font-size: clamp(0.75rem, 2.5vw, 0.85rem);">
-            (✋ Bola | ✌️ Hati 3D | ☝️ Tulip & Tangkai)
-        </p>
+    <div id="message-card">
+        <div id="card-text-wrapper">
+            <h3 id="card-title">Memuat...</h3>
+            <p id="card-desc">Tunggu sebentar...</p>
+        </div>
+        <button class="btn-utama" id="btn-next">Gunakan Sensor Tangan</button>
     </div>
 
-    <video id="webcam" autoplay playsinline></video>
+    <div id="mindar-overlay-container">
+        <div id="ar-scene-target-container"></div>
+    </div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import gsap from 'gsap';
-        import { GestureRecognizer, FilesetResolver } from '@mediapipe/tasks-vision';
+    <div id="tutorial-overlay">
+        <div class="tutorial-logo-container">
+            <img src="https://pub-02d853231cff4efa92ee6754c646a898.r2.dev/Logo_HM.png" class="tutorial-logo" alt="Scanning Logo">
+            <div class="scan-line-logo"></div>
+        </div>
+        <div class="tutorial-text" style="text-align: center;">
+            <h3>Fokus ke Foto</h3>
+            <p>Arahkan kameramu tepat ke foto fisik,<br>saksikan momen indah bersemi kembali. 🌸</p>
+        </div>
+        <button id="preview-mascot-btn" onclick="toggleMascotPreview()">
+            <img src="https://pub-02d853231cff4efa92ee6754c646a898.r2.dev/Animasi/1000283700-removebg-preview.png" alt="">
+            <span>Lihat Maskot</span>
+        </button>
+    </div>
 
-        // --- 1. SETUP THREE.JS (GPU ACCELERATED PARTICLES) ---
-        const isMobile = () => window.innerWidth < window.innerHeight;
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x0d0d0d, 0.04);
-        
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Jauhkan kamera sedikit di mobile karena Tulip bentuknya tinggi
-        camera.position.z = isMobile() ? 20 : 14;
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        document.body.appendChild(renderer.domElement);
+    <div id="ar-mascot-stage">
+        <div id="preview-label">✦ preview maskot ✦</div>
+        <button id="preview-close-btn" onclick="closeMascotPreview()">✕</button>
 
-        const particleCount = 12000;
-        const geometry = new THREE.BufferGeometry();
-        const currentPositions = new Float32Array(particleCount * 3);
+        <div id="video-panel">
+            <div id="video-panel-header">
+                <span>🎬 VIDEO KENANGAN</span>
+                <button id="video-panel-close" onclick="closeVideoPanel()">✕</button>
+            </div>
+            <video id="ar-video-el" playsinline webkit-playsinline loop></video>
+        </div>
+
+        <div id="mascot-wrap" onclick="onMascotTap()">
+            <div id="speech-bubble">
+                <div id="bubble-slide-title">Hana Memoria ✨</div>
+                <div id="bubble-slide-body">Momen indah ini dihidupkan kembali untukmu.</div>
+                <button id="bubble-next-btn" onclick="onBubbleNext(event)">LANJUT ›</button>
+            </div>
+
+            <div style="position:relative; display:inline-block;">
+                <img id="mascot-img"
+                    src="https://pub-02d853231cff4efa92ee6754c646a898.r2.dev/Animasi/1000283700-removebg-preview.png"
+                    alt="Hana"
+                    onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'120\' height=\'140\' viewBox=\'0 0 120 140\'><ellipse cx=\'60\' cy=\'80\' rx=\'38\' ry=\'48\' fill=\'%23f4c5b3\'/><ellipse cx=\'60\' cy=\'55\' rx=\'32\' ry=\'35\' fill=\'%23f9d9cc\'/><circle cx=\'46\' cy=\'52\' r=\'7\' fill=\'%23222\'/><circle cx=\'74\' cy=\'52\' r=\'7\' fill=\'%23222\'/><path d=\'M52 65 Q60 72 68 65\' stroke=\'%23c07060\' stroke-width=\'2\' fill=\'none\' stroke-linecap=\'round\'/><polygon points=\'60,20 40,50 80,50\' fill=\'%23f4b0a0\'/></svg>'"
+                >
+                <button id="mascot-heart-btn" onclick="onHeartTap(event)" title="Putar video kenangan">
+                    ▶
+                </button>
+            </div>
+
+            <div id="mascot-tap-hint">ketuk aku ✨</div>
+        </div>
+
+        <div class="deco-particle" style="left:8%; animation-duration:7s; animation-delay:0s;">🌸</div>
+        <div class="deco-particle" style="left:18%; animation-duration:9s; animation-delay:1.5s;">✨</div>
+        <div class="deco-particle" style="right:10%; animation-duration:8s; animation-delay:0.8s;">🌸</div>
+        <div class="deco-particle" style="right:22%; animation-duration:10s; animation-delay:3s;">⭐</div>
+        <div class="deco-particle" style="left:35%; animation-duration:11s; animation-delay:2s;">🌷</div>
+        <div class="deco-particle" style="right:35%; animation-duration:7.5s; animation-delay:4s;">✨</div>
+        <div class="deco-particle" style="left:5%; animation-duration:12s; animation-delay:5s;">💫</div>
+        <div class="deco-particle" style="right:5%; animation-duration:9.5s; animation-delay:1s;">🌸</div>
+    </div>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        attribute float aRandom;
+        attribute vec3 aScatterDir; 
         
-        for(let i = 0; i < particleCount * 3; i++) {
-            currentPositions[i] = (Math.random() - 0.5) * 25;
+        uniform float uSizeMultiplier;
+        uniform float uTime;
+        uniform float uScatter; 
+
+        void main() {
+            vec3 basePos = position;
+            vec3 scatteredPos = basePos + (aScatterDir * uScatter * 40.0);
+            
+            vec3 wobble = vec3(
+                sin(uTime * 1.5 + aRandom * 10.0) * 0.05,
+                cos(uTime * 1.4 + aRandom * 10.0) * 0.05,
+                sin(uTime * 1.3 + aRandom * 10.0) * 0.05
+            );
+
+            vec3 finalPos = scatteredPos + wobble;
+            vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+            
+            gl_PointSize = uSizeMultiplier * (12.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
         }
+    </script>
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        uniform vec3 uColor;
+        uniform float uOpacity; 
         
-        geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
-        geometry.setAttribute('aTarget', new THREE.BufferAttribute(new Float32Array(currentPositions), 3));
+        void main() {
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            if(length(coord) > 0.5) discard;
+            if(uOpacity < 0.5) discard;
+            gl_FragColor = vec4(uColor, 1.0);
+        }
+    </script>
 
-        const uniforms = {
-            uProgress: { value: 0.0 },
-            uColor: { value: new THREE.Color('#e0bfb8') }, 
-            uSizeMultiplier: { value: isMobile() ? 15.0 : 12.0 }
+    <script>
+        const SUPABASE_URL = 'https://ujnuvlrdxzqtfppbhioo.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqbnV2bHJkeHpxdGZwcGJoaW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjU2OTYsImV4cCI6MjA5MDY0MTY5Nn0.slqPc8v7QZXxHzvMkOlXWAAYebX-sqUIiKZvA9DJkl0';
+        const params = new URLSearchParams(window.location.search);
+        const idPelanggan = params.get('id') || 'default';
+
+        if (!params.get('id')) {
+            window.location.replace(window.location.pathname + '?id=demo');
+        }
+
+        let slides = [];
+        let slideIndex = 0;
+        let sceneARTemplate = ""; 
+
+        let scene, camera, renderer, clock;
+        let particles, particleMaterial;
+        let mpCameraInstance = null; 
+        
+        const particleCount = 12000; 
+        const patternData = {};
+        let isAnimating = false; 
+        let isProcessingAI = false;
+
+        // Kumpulan bentuk yang akan berganti di setiap slide secara berkala
+        const shapesPool = ['singularity', 'heart', 'tulip', 'frame'];
+        
+        // Pilihan daftar gerakan tangan terdaftar yang digunakan secara bergantian untuk navigasi
+        const sequenceGestures = [
+            { req: 'fist', text: '✊ (Genggam)' },
+            { req: 'peace', text: '✌️ (Peace / 2 Jari)' },
+            { req: 'index', text: '☝️ (Satu Jari Telunjuk)' },
+            { req: 'open_palm', text: '🖐️ (Telapak Terbuka)' },
+            { req: 'thumb_up', text: '👍 (Jempol)' }
+        ];
+
+        const statusText = document.getElementById('status-text');
+        const statusIndicator = document.getElementById('status-indicator');
+        const hintEl = document.getElementById('gesture-hint');
+        const startBtn = document.getElementById('start-btn');
+        const taglineHandEl = document.getElementById('tagline-hand');
+        const isMobile = () => window.innerWidth < window.innerHeight;
+
+        const DEMO_DATA = {
+            nama_pelanggan: "Demo Hana Memoria",
+            nama_paket: "Paket Demo",
+            tanggal_acara: "2025-01-01",
+            slides: JSON.stringify([
+                { t: "Hana Memoria ✨", b: "Selamat datang di lembaran cerita baru kita. Tunjukkan tanganmu untuk membacanya." },
+                { t: "Setiap Detik Berharga 🎀", b: "Bersamamu adalah petualangan terbaik dalam hidupku." },
+                { t: "Menatap Masa Depan", b: "Ayo buka kejutan terakhir yang telah disiapkan khusus di halaman ini." }
+            ]),
+            link_video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+            link_target: "https://pub-02d853231cff4efa92ee6754c646a898.r2.dev/targets.mind",
+            video_posisi: "0 0 0",
+            video_skala: "1 1.5 1",
+            video_rotasi: "0 0 0",
+            pesan_teks: "Ini adalah pesan demo dari Hana Memoria 💕",
+            nomor_wa: "6281234567890"
         };
 
-        const vertexShader = `
-            attribute vec3 aTarget;
-            uniform float uProgress;
-            uniform float uSizeMultiplier;
-            void main() {
-                vec3 finalPos = mix(position, aTarget, uProgress);
-                vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
-                gl_PointSize = uSizeMultiplier * (12.0 / -mvPosition.z);
-                gl_Position = projectionMatrix * mvPosition;
-            }
-        `;
-        
-        const fragmentShader = `
-            uniform vec3 uColor;
-            void main() {
-                vec2 coord = gl_PointCoord - vec2(0.5);
-                float distanceToCenter = length(coord);
-                if(distanceToCenter > 0.5) discard;
-                float strength = 0.08 / (distanceToCenter + 0.05);
-                gl_FragColor = vec4(uColor, pow(strength, 1.5) * 0.8);
-            }
-        `;
-        
-        const particleMaterial = new THREE.ShaderMaterial({
-            uniforms: uniforms, vertexShader, fragmentShader,
-            transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
-        });
-        
-        const particles = new THREE.Points(geometry, particleMaterial);
-        scene.add(particles);
+        window.onload = async () => {
+            if (idPelanggan === 'demo') {
+                const data = DEMO_DATA;
+                initMascotData(data);
+                let rawSlides = data.slides;
+                try { if (typeof rawSlides === 'string') rawSlides = JSON.parse(rawSlides); } catch(e) {}
+                slides = Array.isArray(rawSlides) ? rawSlides : [{ t: "Demo", b: "Mode uji coba aktif." }];
 
-        // --- 2. BENTUK GEOMETRI (SPHERE, 3D HEART, TULIP FRAME) ---
-        
-        function getSpherePositions() {
-            const arr = new Float32Array(particleCount * 3);
-            for(let i = 0; i < particleCount; i++) {
-                const phi = Math.acos(-1 + (2 * i) / particleCount);
-                const theta = Math.sqrt(particleCount * Math.PI) * phi;
-                const r = 5.0; 
-                arr[i*3] = r * Math.cos(theta) * Math.sin(phi);
-                arr[i*3+1] = r * Math.sin(theta) * Math.sin(phi);
-                arr[i*3+2] = r * Math.cos(phi);
+                const p = (data.video_posisi || "0 0 0").split(' ');
+                const s = (data.video_skala || "1 1.5 1").split(' ');
+                const rotZ = parseFloat((data.video_rotasi || "0 0 0").split(' ')[2]);
+
+                sceneARTemplate = `
+                    <a-scene id="ar-scene" mindar-image="imageTargetSrc: ${data.link_target}; autoStart: false; uiScanning: no;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" embedded>
+                        <a-assets><video id="webVideo" src="${data.link_video}" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video></a-assets>
+                        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+                        <a-entity mindar-image-target="targetIndex: 0" id="target-ar">
+                            <a-video id="vDisplay" src="#webVideo" position="${p[0]} ${p[1]} 0" width="${s[0]}" height="${s[1]}" rotation="0 0 ${rotZ}"></a-video>
+                        </a-entity>
+                    </a-scene>
+                `;
+                document.getElementById('loading').classList.add('fade-out');
+                document.getElementById('main-hand-ui').style.display = 'block';
+                initThree();
+                createParticles();
+                animate();
+                updateCardUI();
+                document.getElementById('message-card').classList.add('show');
+            } else {
+                try {
+                    const res = await fetch(`${SUPABASE_URL}/rest/v1/Pesanan?id_pesanan=eq.${idPelanggan}`, {
+                        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                    });
+                    if (!res.ok) throw new Error("Gagal akses database");
+                    const data = (await res.json())[0];
+                    if(data) {
+                        initMascotData(data);
+                        let rawSlides = data.slides;
+                        try { if (typeof rawSlides === 'string') rawSlides = JSON.parse(rawSlides); } catch(e) {}
+                        if (Array.isArray(rawSlides) && rawSlides.length > 0 && rawSlides[0].t) {
+                            slides = rawSlides;
+                        } else {
+                            slides = [{ "t": "Hana Memoria ✨", "b": "Kenangan manis ini dihidupkan kembali khusus untukmu." }];
+                        }
+                        const p = (data.video_posisi || "0 0 0").split(' ');
+                        const s = (data.video_skala || "1 1.5 1").split(' ');
+                        const rotZ = parseFloat((data.video_rotasi || "0 0 0").split(' ')[2]);
+
+                        sceneARTemplate = `
+                            <a-scene id="ar-scene" mindar-image="imageTargetSrc: ${data.link_target}; autoStart: false; uiScanning: no;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" embedded>
+                                <a-assets><video id="webVideo" src="${data.link_video}" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video></a-assets>
+                                <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+                                <a-entity mindar-image-target="targetIndex: 0" id="target-ar">
+                                    <a-video id="vDisplay" src="#webVideo" position="${p[0]} ${p[1]} 0" width="${s[0]}" height="${s[1]}" rotation="0 0 ${rotZ}"></a-video>
+                                </a-entity>
+                            </a-scene>
+                        `;
+                        document.getElementById('loading').classList.add('fade-out');
+                        document.getElementById('main-hand-ui').style.display = 'block';
+                        initThree();
+                        createParticles();
+                        animate();
+                        updateCardUI();
+                        document.getElementById('message-card').classList.add('show');
+                    } else {
+                        document.getElementById('loading-sub').innerText = "Data tidak ditemukan. Pastikan URL valid.";
+                    }
+                } catch(e) {
+                    document.getElementById('loading-sub').innerText = "Koneksi terputus. Muat ulang halaman.";
+                }
             }
-            return arr;
+
+            startBtn.onclick = () => {
+                startBtn.style.display = 'none';
+                initMediaPipe();
+            };
+        };
+
+        function updateStatus(text, isActive, isError=false) {
+            statusText.innerText = text;
+            statusIndicator.className = "dot" + (isActive ? " active" : "") + (isError ? " error" : "");
         }
 
-        // PEMBARUAN: Hati parametrik 3D bervolume (permukaan cembung)
-        function getHeartPositions() {
-            const arr = new Float32Array(particleCount * 3);
-            for(let i = 0; i < particleCount; i++) {
-                // Sudut shell parametrik
-                const t = Math.random() * Math.PI * 2; // Mengelilingi outline
-                const v = Math.random() * Math.PI - Math.PI / 2; // Kedalaman cembung
+        function createParticles() {
+            patternData['scatter'] = getScatterPositions();
+            patternData['singularity'] = getSingularityPositions();
+            patternData['heart'] = getHeartPositions();
+            patternData['tulip'] = getTulipPositions();
+            patternData['frame'] = getFramePositions();
+            patternData['openEnvelope'] = getOpenEnvelopePositions();
 
-                // Skala outline hati dasar
-                const scale = 0.3;
-                // Ketebalan maksimum volume 3D
-                const baseDepth = 2.8; 
-
-                // Persamaan cangkang jantung parametrik
-                const shellX = 16 * Math.pow(Math.sin(t), 3);
-                const shellY = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
-                
-                // Distribusi partikel agar cembung di tengah
-                const depthTaper = Math.cos(v); // Menipis di pinggir outline
-
-                // Transformasi ke Z untuk kedalaman volumetrik
-                arr[i*3] = (shellX * scale) * depthTaper; 
-                arr[i*3+1] = (shellY * scale) * depthTaper + 2.0; // Geser sedikit ke atas
-                arr[i*3+2] = baseDepth * Math.sin(v); // Kedalaman Z
-
-                // Noise kecil untuk mengisi volume sedikit
-                const noise = 0.15;
-                arr[i*3] += (Math.random()-0.5)*noise;
-                arr[i*3+1] += (Math.random()-0.5)*noise;
-                arr[i*3+2] += (Math.random()-0.5)*noise;
-            }
-            return arr;
-        }
-
-        // BENTUK BARU: Bunga Tulip parametrik dengan Tangkai & Daun
-        function getTulipPositions() {
-            const arr = new Float32Array(particleCount * 3);
+            clock = new THREE.Clock();
+            const geometry = new THREE.BufferGeometry();
+            const initialPositions = patternData['scatter'];
             
-            // Distribusi partikel: 60% Bunga, 25% Tangkai, 15% Daun
-            const petalCount = Math.floor(particleCount * 0.6);
-            const stemCount = Math.floor(particleCount * 0.25);
-            const leafCount = particleCount - petalCount - stemCount;
-
-            const tulipScale = 4.0;
-            const stemLength = 8.0;
-            const baseOffset = -2.0; // Posisi vertikal Tulip
-
-            // 1. Kelopak Bunga (Bentuk Cangkir/Cup parametrik)
-            for(let i = 0; i < petalCount; i++) {
-                const u = Math.random(); // Tinggi 0 ke 1 di dalam bunga
-                const theta = Math.random() * Math.PI * 2; // Mengelilingi bunga
-                
-                // Rumus kelopak menguncup
-                const radius = (u * 0.7 + 0.3) * Math.sin(Math.pow(u, 0.5) * Math.PI);
-                // Membuat bingkai luar bunga
-                const petalOutline = (1 + 0.15 * Math.sin(theta * 6)) * 1.5; 
-
-                arr[i*3] = radius * Math.cos(theta) * tulipScale * petalOutline;
-                arr[i*3+1] = (u * 3) * tulipScale + baseOffset; // Tinggi Y bunga
-                arr[i*3+2] = radius * Math.sin(theta) * tulipScale * petalOutline;
+            const randoms = new Float32Array(particleCount);
+            const scatterDirs = new Float32Array(particleCount * 3);
+            for(let i=0; i<particleCount; i++) {
+                randoms[i] = Math.random();
+                const theta = Math.random() * Math.PI * 2.0;
+                const phi = Math.acos(2.0 * Math.random() - 1.0);
+                const speed = 0.3 + Math.random() * 0.7;
+                scatterDirs[i*3] = Math.sin(phi) * Math.cos(theta) * speed;
+                scatterDirs[i*3+1] = Math.sin(phi) * Math.sin(theta) * speed;
+                scatterDirs[i*3+2] = Math.cos(phi) * speed;
             }
+            geometry.setAttribute('position', new THREE.BufferAttribute(initialPositions, 3));
+            geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 1));
+            geometry.setAttribute('aScatterDir', new THREE.BufferAttribute(scatterDirs, 3));
 
-            // 2. Tangkai (Garis lurus vertikal bervolume tipis)
-            for(let i = 0; i < stemCount; i++) {
-                const h = Math.random();
-                const stemNoise = 0.12;
-                arr[(petalCount + i)*3] = (Math.random()-0.5)*stemNoise;
-                arr[(petalCount + i)*3+1] = -h * stemLength + baseOffset; // Mengarah ke bawah
-                arr[(petalCount + i)*3+2] = (Math.random()-0.5)*stemNoise;
-            }
-
-            // 3. Daun (Bentuk oval parametrik di sisi tangkai)
-            for(let i = 0; i < leafCount; i++) {
-                const u = Math.random(); // Posisi di sepanjang panjang daun
-                const isLeft = i < leafCount / 2;
-                
-                // Parameter daun
-                const leafLen = 3.5;
-                const leafWidth = 1.0;
-                const attachHeight = -stemLength * (isLeft ? 0.35 : 0.6) + baseOffset;
-                
-                const px = u * leafLen; 
-                const py = Math.sin(u * Math.PI) * leafWidth; // Ketebalan daun oval
-
-                // Kemiringan daun ke atas
-                const angleUp = -0.4; // Radian (sekitar 23 derajat menengadah)
-
-                // simplified 3D rotation/translation untuk daun
-                const x = px;
-                const y = py;
-                const z = (Math.random()-0.5)*0.2; // Ketebalan Z tipis
-
-                // Apply kemiringan menengadah
-                const finalX = (x * Math.cos(angleUp) - y * Math.sin(angleUp));
-                const finalY = (x * Math.sin(angleUp) + y * Math.cos(angleUp)) + attachHeight;
-
-                arr[(petalCount + stemCount + i)*3] = finalX * (isLeft ? 1 : -1); 
-                arr[(petalCount + stemCount + i)*3+1] = finalY;
-                arr[(petalCount + stemCount + i)*3+2] = z + (Math.random()-0.5)*0.05;
-            }
-            
-            // Tambahkan kedalaman Z acak global agar frame tidak rata
-            for(let i = 0; i < particleCount; i++) {
-                 arr[i*3+2] += (Math.random()-0.5)*0.1;
-            }
-
-            return arr;
+            particleMaterial = new THREE.ShaderMaterial({
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uScatter: { value: 0.0 },
+                    uOpacity: { value: 1.0 },
+                    uColor: { value: new THREE.Color('#e0bfb8') },
+                    uSizeMultiplier: { value: isMobile() ? 4.0 : 2.0 }
+                },
+                transparent: false,
+                blending: THREE.NoBlending,
+                depthWrite: true,
+                depthTest: true
+            });
+            particles = new THREE.Points(geometry, particleMaterial);
+            scene.add(particles);
         }
 
-        // --- 3. LOGIKA TRANSISI ---
-        let isAnimating = false;
-        let currentShape = 'sphere';
-
-        function updateGestureTarget(newPositionsArray, shapeName) {
-            if (isAnimating || currentShape === shapeName) return; 
+        function transitionPattern(shapeName, callback) {
+            if (isAnimating || !particles) return;
             isAnimating = true;
-            currentShape = shapeName;
 
-            const currentPosAttribute = geometry.attributes.position;
-            const targetAttribute = geometry.attributes.aTarget;
-            
-            for(let i = 0; i < particleCount * 3; i++) {
-                currentPosAttribute.array[i] += (targetAttribute.array[i] - currentPosAttribute.array[i]) * uniforms.uProgress.value;
-                targetAttribute.array[i] = newPositionsArray[i];
+            if (shapeName === 'openEnvelope') {
+                taglineHandEl.innerText = 'Surat kenangan terbuka... ✨';
+            } else {
+                taglineHandEl.innerText = 'Mengabadikan cerita dalam setiap bingkai.';
             }
-            currentPosAttribute.needsUpdate = true;
-            targetAttribute.needsUpdate = true;
 
-            uniforms.uProgress.value = 0;
-            gsap.killTweensOf(uniforms.uProgress); 
-            gsap.to(uniforms.uProgress, {
-                value: 1.0,
-                duration: 2.2, // Transisi sedikit lebih lambat agar dramatis
-                ease: "expo.inOut",
-                onComplete: () => { isAnimating = false; }
+            gsap.to(particleMaterial.uniforms.uScatter, { value: 1.0, duration: 1.0, ease: "power2.in" });
+            gsap.to(particleMaterial.uniforms.uOpacity, { value: 0.0, duration: 1.0, ease: "power2.in", onComplete: () => {
+                const posAttr = particles.geometry.attributes.position;
+                const newPositions = patternData[shapeName];
+                for(let i = 0; i < particleCount * 3; i++) posAttr.array[i] = newPositions[i];
+                posAttr.needsUpdate = true;
+                particles.rotation.x = -0.2;
+
+                gsap.to(particleMaterial.uniforms.uOpacity, { value: 1.0, duration: 1.2, ease: "power2.out" });
+                gsap.to(particleMaterial.uniforms.uScatter, { value: 0.0, duration: 1.2, ease: "power2.out", onComplete: () => {
+                    isAnimating = false;
+                    if(callback) callback();
+                }});
+            }});
+        }
+
+        function updateCardUI() {
+            if(slides.length > 0 && slideIndex < slides.length) {
+                document.getElementById('card-title').innerText = slides[slideIndex].t || "Hana Memoria";
+                document.getElementById('card-desc').innerText = slides[slideIndex].b || "...";
+                
+                // Set instruksi gestur dinamis di tombol utama penunjuk
+                const currentGestureObj = sequenceGestures[slideIndex % sequenceGestures.length];
+                document.getElementById('btn-next').innerHTML = `Tunjukkan Tangan: <span>${currentGestureObj.text}</span>`;
+                
+                if (mpCameraInstance) {
+                    hintEl.innerHTML = `Pesan ke-${slideIndex + 1}. Gerakkan tangan: <span>${currentGestureObj.text}</span>`;
+                }
+            }
+        }
+
+        // Fungsi pemicu perpindahan halaman pesan berbasis gestur tangan
+        function advanceMessageFlow() {
+            if (isAnimating) return;
+
+            const card = document.getElementById('message-card');
+            const wrapper = document.getElementById('card-text-wrapper');
+
+            // Jika masih ada slide berikutnya
+            if (slideIndex < slides.length - 1) {
+                wrapper.style.opacity = 0;
+                
+                // Tentukan pola 3D selanjutnya secara bergantian dari kolam bentuk
+                const nextShape = shapesPool[(slideIndex + 1) % shapesPool.length];
+                
+                transitionPattern(nextShape, () => {
+                    slideIndex++;
+                    updateCardUI();
+                    wrapper.style.opacity = 1;
+                });
+            } else {
+                // JIKA SLIDE TERAKHIR SELESAI -> Masuk Fase Transisi AR Utama
+                wrapper.style.opacity = 0;
+                document.getElementById('btn-next').innerText = "MEMBUKA SCANNER...";
+                
+                // Berubah menjadi pola terakhir: Amplop Terbuka
+                transitionPattern('openEnvelope', () => {
+                    card.classList.remove('show');
+                    
+                    // Matikan AI Hand Tracking pelacak tangan agar hemat daya & membebaskan kamera kamera
+                    if (mpCameraInstance) {
+                        try { mpCameraInstance.stop(); } catch(e){}
+                    }
+                    document.getElementById('main-hand-ui').style.display = 'none';
+                    
+                    // Alihkan menuju kamera AR MindAR
+                    startMindAR();
+                });
+            }
+        }
+
+        function startMindAR() {
+            const container = document.getElementById('mindar-overlay-container');
+            container.classList.add('active');
+            document.getElementById('ar-scene-target-container').innerHTML = sceneARTemplate;
+            document.getElementById('tutorial-overlay').style.display = 'flex';
+
+            setTimeout(() => {
+                const sc = document.getElementById('ar-scene');
+                if (sc && sc.systems && sc.systems['mindar-image-system']) {
+                    sc.systems['mindar-image-system'].start();
+                }
+                
+                const targetAR = document.getElementById('target-ar');
+                const vid = document.getElementById('webVideo');
+                if (targetAR && vid) {
+                    targetAR.addEventListener("targetFound", () => {
+                        document.getElementById('tutorial-overlay').style.display = 'none';
+                        vid.play();
+                        showMascotStage();
+                    });
+                    targetAR.addEventListener("targetLost", () => {
+                        document.getElementById('tutorial-overlay').style.display = 'flex';
+                        vid.pause();
+                        hideMascotStage();
+                    });
+                }
+            }, 500);
+        }
+
+        function initMediaPipe() {
+            updateStatus("Mengunduh AI (~10MB)...", false);
+            const videoElement = document.getElementById('webcam');
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.65, minTrackingConfidence: 0.65 });
+            hands.onResults(onHandResults);
+            
+            hands.initialize().then(() => {
+                updateStatus("Meminta Akses Kamera...", false);
+                let lastProcessTime = 0;
+                mpCameraInstance = new Camera(videoElement, {
+                    onFrame: async () => {
+                        const now = Date.now();
+                        if (!isAnimating && !isProcessingAI && now - lastProcessTime >= 150) {
+                            isProcessingAI = true;
+                            await hands.send({image: videoElement});
+                            isProcessingAI = false;
+                            lastProcessTime = now;
+                        }
+                    }, width: 160, height: 120
+                });
+                mpCameraInstance.start().then(() => {
+                    updateStatus("Sensor Tangan Aktif", true);
+                    updateCardUI();
+                }).catch((err) => {
+                    updateStatus("Kamera Ditolak", false, true);
+                    hintEl.innerHTML = "Harap izinkan akses kamera di browser.";
+                    startBtn.style.display = 'block';
+                    startBtn.innerText = 'Coba Lagi';
+                });
+            }).catch((err) => {
+                updateStatus("Gagal Memuat AI", false, true);
             });
         }
 
-        // --- 4. MEDIAPIPE & CAMERA SETUP (Tidak berubah berat, hanya nambah gestur) ---
-        let gestureRecognizer;
-        const video = document.getElementById('webcam');
-        const statusText = document.getElementById('status-text');
-        const statusIndicator = document.getElementById('status-indicator');
-        const startBtn = document.getElementById('start-btn');
+        let consecutiveGestures = 0;
+        function onHandResults(results) {
+            if (isAnimating) return;
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const getD = (p1, p2) => Math.hypot(landmarks[p1].x - landmarks[p2].x, landmarks[p1].y - landmarks[p2].y);
 
-        async function initMediaPipe() {
-            startBtn.style.display = 'none';
-            statusText.innerText = "Memuat AI Model...";
-            statusIndicator.className = 'dot'; 
-            statusIndicator.style.backgroundColor = "#ffaa00"; 
+                const isIndexOpen = getD(8, 0) > getD(5, 0) * 1.2;
+                const isMiddleOpen = getD(12, 0) > getD(9, 0) * 1.2;
+                const isRingOpen = getD(16, 0) > getD(13, 0) * 1.2;
+                const isPinkyOpen = getD(20, 0) > getD(17, 0) * 1.2;
+                const isThumbOpen = getD(4, 5) > getD(3, 5) * 1.1;
 
-            try {
-                const vision = await FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-                );
-                
-                gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
-                        delegate: "GPU"
-                    },
-                    runningMode: "VIDEO"
-                });
+                const pinchDist = getD(4, 8); 
 
-                statusText.innerText = "Meminta Akses Kamera...";
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } 
-                });
-                
-                video.srcObject = stream;
-                video.addEventListener("loadeddata", predictWebcam);
+                const isFist = !isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen;
+                const isPeaceSign = isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen;
+                const isIndexPointing = isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen;
+                const isOpenPalm = isIndexOpen && isMiddleOpen && isRingOpen && isPinkyOpen && isThumbOpen;
+                const isThumbUp = isThumbOpen && !isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen;
+                const isPinch = pinchDist < 0.10 && !isFist;
 
-                statusText.innerText = "Sensor Aktif";
-                statusIndicator.style.backgroundColor = ""; 
-                statusIndicator.className = 'dot active'; 
+                // Ambil target gestur yang dibutuhkan untuk slide aktif saat ini
+                const currentGestureNeeded = sequenceGestures[slideIndex % sequenceGestures.length].req;
+                let matchTarget = false;
 
-            } catch (error) {
-                console.error("Error:", error);
-                statusText.innerText = "Error: " + error.message; 
-                statusIndicator.className = 'dot error'; 
-                startBtn.style.display = 'block';
-                startBtn.innerText = "Coba Lagi";
-            }
-        }
+                if (currentGestureNeeded === 'fist' && isFist) matchTarget = true;
+                else if (currentGestureNeeded === 'peace' && isPeaceSign) matchTarget = true;
+                else if (currentGestureNeeded === 'index' && isIndexPointing) matchTarget = true;
+                else if (currentGestureNeeded === 'open_palm' && isOpenPalm) matchTarget = true;
+                else if (currentGestureNeeded === 'thumb_up' && isThumbUp) matchTarget = true;
+                else if (currentGestureNeeded === 'pinch' && isPinch) matchTarget = true;
 
-        startBtn.addEventListener('click', initMediaPipe);
-
-        let lastVideoTime = -1;
-        function predictWebcam() {
-            if (video.currentTime !== lastVideoTime) {
-                lastVideoTime = video.currentTime;
-                
-                const results = gestureRecognizer.recognizeForVideo(video, performance.now());
-                
-                if (results.gestures.length > 0) {
-                    const categoryName = results.gestures[0][0].categoryName;
-                    
-                    // PEMBARUAN: Logika Pemetaan Gestur Baru
-                    if (categoryName === "Open_Palm") {
-                        updateGestureTarget(getSpherePositions(), 'sphere');
-                    } 
-                    else if (categoryName === "Victory" || categoryName === "ILoveYou") {
-                        updateGestureTarget(getHeartPositions(), 'heart');
+                if (matchTarget) {
+                    consecutiveGestures++;
+                    if (consecutiveGestures >= 3) {
+                        consecutiveGestures = 0;
+                        advanceMessageFlow(); // Pindah slide otomatis lewat sensor tangan!
                     }
-                    // GESTUR BARU: Menunjuk ke atas -> Tulip
-                    else if (categoryName === "Pointing_Up") {
-                        updateGestureTarget(getTulipPositions(), 'tulip');
-                    }
+                } else {
+                    consecutiveGestures = 0;
                 }
+            } else {
+                consecutiveGestures = 0;
             }
-            requestAnimationFrame(predictWebcam);
         }
 
-        // --- 5. RENDER LOOP ---
-        setTimeout(() => updateGestureTarget(getSpherePositions(), 'sphere'), 300);
-        
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.position.z = isMobile() ? 20 : 14; // Perbarui jarak kamera
-            uniforms.uSizeMultiplier.value = isMobile() ? 15.0 : 12.0;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            particles.rotation.y = clock.getElapsedTime() * 0.12;
-            renderer.render(scene, camera);
+            if(particles) {
+                const elapsedTime = clock.getElapsedTime();
+                particleMaterial.uniforms.uTime.value = elapsedTime;
+                particles.rotation.y = elapsedTime * 0.4;
+                particles.rotation.x = THREE.MathUtils.lerp(particles.rotation.x, -0.2, 0.05);
+                renderer.render(scene, camera);
+            }
         }
-        animate();
 
+        // ============ FORMULA MATEMATIKA BENTUK PARTIKEL TIGA JS ============
+        function randomTriangle(arr, startIdx, count, a, b, c, zNoise=0.0) {
+            let idx = startIdx * 3;
+            for(let i=0; i<count; i++) {
+                let r1 = Math.random(), r2 = Math.random();
+                if(r1 + r2 > 1.0) { r1 = 1.0 - r1; r2 = 1.0 - r2; }
+                arr[idx] = a.x + r1*(b.x-a.x) + r2*(c.x-a.x) + (Math.random()-0.5)*zNoise;
+                arr[idx+1] = a.y + r1*(b.y-a.y) + r2*(c.y-a.y) + (Math.random()-0.5)*zNoise;
+                arr[idx+2] = a.z + r1*(b.z-a.z) + r2*(c.z-a.z) + (Math.random()-0.5)*0.02;
+            }
+        }
+        function getScatterPositions() {
+            const arr = new Float32Array(particleCount * 3);
+            for(let i = 0; i < particleCount * 3; i++) arr[i] = (Math.random() - 0.5) * 45;
+            return arr;
+        }
+        function getSingularityPositions() {
+            const arr = new Float32Array(particleCount * 3);
+            for(let i = 0; i < particleCount * 3; i+=3) {
+                const u = Math.random(), v = Math.random();
+                const theta = u * 2.0 * Math.PI;
+                const phi = Math.acos(2.0 * v - 1.0);
+                const r = Math.cbrt(Math.random()) * 2.0;
+                arr[i] = r * Math.sin(phi) * Math.cos(theta);
+                arr[i+1] = r * Math.sin(phi) * Math.sin(theta);
+                arr[i+2] = r * Math.cos(phi);
+            }
+            return arr;
+        }
+        function getHeartPositions() {
+            const arr = new Float32Array(particleCount * 3);
+            const scale = 4.5;
+            for(let i = 0; i < particleCount * 3; i+=3) {
+                let x, y;
+                while(true) {
+                    x = (Math.random() - 0.5) * 3.0;
+                    y = (Math.random() - 0.5) * 3.0;
+                    let a = x*x + y*y - 1.0;
+                    if (a*a*a - x*x*y*y*y <= 0.0) break;
+                }
+                arr[i] = x * scale;
+                arr[i+1] = y * scale + 1.0;
+                arr[i+2] = (Math.random() - 0.5) * 0.8;
+            }
+            return arr;
+        }
+        function getTulipPositions() {
+            const arr = new Float32Array(particleCount * 3);
+            let idx = 0;
+            const stemCount = Math.floor(particleCount * 0.25);
+            const flowerCount = particleCount - stemCount;
+            for(let i=0; i<stemCount; i++) {
+                const t = Math.random();
+                arr[idx++] = Math.sin(t * 4.0) * 0.3 + (Math.random()-0.5)*0.1;
+                arr[idx++] = t * 6.0 - 5.0;
+                arr[idx++] = (Math.random()-0.5)*0.1;
+            }
+            const flowerBaseY = 1.0;
+            for(let i=0; i<flowerCount; i++) {
+                const u = Math.random(), v = Math.random();
+                const petalIndex = Math.floor(Math.random() * 6), angleBase = (petalIndex * Math.PI * 2) / 6.0, petalWidthAngle = Math.PI / 2.5;
+                const theta = angleBase + (v - 0.5) * petalWidthAngle;
+                let r = Math.sin(Math.acos(1 - u * 1.4)) * 2.8;
+                if (isNaN(r)) r = 2.0;
+                if(u > 0.6) r -= (u - 0.6) * 2.0;
+                const tipPinch = Math.sin(v * Math.PI), heightVariation = u * 5.0 + tipPinch * 1.5;
+                arr[idx++] = r * Math.cos(theta) + (Math.random()-0.5)*0.1;
+                arr[idx++] = flowerBaseY + heightVariation + (Math.random()-0.5)*0.1;
+                arr[idx++] = r * Math.sin(theta) + (Math.random()-0.5)*0.1;
+            }
+            return arr;
+        }
+        function getFramePositions() {
+            const arr = new Float32Array(particleCount * 3);
+            const wOuter = 3.5, hOuter = 5.5, thick = 0.8;
+            for(let i = 0; i < particleCount * 3; i+=3) {
+                let x, y, z;
+                if (Math.random() < 0.70) {
+                    const edge = Math.random();
+                    if (edge < 0.25) { x = (Math.random()-0.5)*wOuter*2; y = hOuter-Math.random()*thick; }
+                    else if (edge < 0.5) { x = (Math.random()-0.5)*wOuter*2; y = -hOuter+Math.random()*thick; }
+                    else if (edge < 0.75) { x = -wOuter+Math.random()*thick; y = (Math.random()-0.5)*hOuter*2; }
+                    else { x = wOuter-Math.random()*thick; y = (Math.random()-0.5)*hOuter*2; }
+                } else {
+                    x = (Math.random()-0.5) * (wOuter*2-thick*2);
+                    y = (Math.random()-0.5) * (hOuter*2-thick*2);
+                }
+                z = (Math.random() - 0.5) * 0.5;
+                arr[i] = x; arr[i+1] = y + 0.5; arr[i+2] = z;
+            }
+            return arr;
+        }
+        function getOpenEnvelopePositions() {
+            const arr = new Float32Array(particleCount * 3);
+            const w = 7.5, h = 4.5;
+            let cBack = Math.floor(particleCount * 0.3);
+            let cPaper = Math.floor(particleCount * 0.25);
+            let cSide = Math.floor(particleCount * 0.15);
+            let cTop = particleCount - cBack - cPaper - (cSide * 2);
+            let TL = {x: -w/2, y: h/2, z: 0}, TR = {x: w/2, y: h/2, z: 0};
+            let BL = {x: -w/2, y: -h/2, z: 0}, BR = {x: w/2, y: -h/2, z: 0};
+            let M = {x: 0, y: 0, z: 0.1};
+            randomTriangle(arr, 0, Math.floor(cBack/2), TL, TR, BL, 0.0);
+            randomTriangle(arr, Math.floor(cBack/2), cBack - Math.floor(cBack/2), TR, BR, BL, 0.0);
+            let pTL = {x: -w/2 + 0.5, y: h/2 + 2.0, z: 0.05};
+            let pTR = {x: w/2 - 0.5, y: h/2 + 2.0, z: 0.05};
+            let pBL = {x: -w/2 + 0.5, y: -h/2 + 0.5, z: 0.05};
+            let pBR = {x: w/2 - 0.5, y: -h/2 + 0.5, z: 0.05};
+            randomTriangle(arr, cBack, Math.floor(cPaper/2), pTL, pTR, pBL, 0.01);
+            randomTriangle(arr, cBack+Math.floor(cPaper/2), cPaper - Math.floor(cPaper/2), pTR, pBR, pBL, 0.01);
+            randomTriangle(arr, cBack+cPaper, cSide, TL, BL, M, 0.03);
+            randomTriangle(arr, cBack+cPaper+cSide, cSide, TR, BR, M, 0.03);
+            randomTriangle(arr, cBack+cPaper+cSide*2, cSide, BL, BR, {x:0, y:-0.5, z:0.15}, 0.03);
+            randomTriangle(arr, cBack+cPaper+cSide*3, cTop, TL, TR, {x:0, y:h/2+2.5, z:0.2}, 0.03);
+            for(let i=0; i<particleCount*3; i+=3) { arr[i+1] -= 1.0; }
+            return arr;
+        }
+
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = isMobile() ? 20 : 15;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.body.appendChild(renderer.domElement);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // ============ LOGIKA MASKOT AR OVERLAY ============
+        let arSlides = [];
+        let arSlideIdx = 0;
+        let arVideoSrc = null;
+        let bubbleOpen = false;
+
+        function initMascotData(data) {
+            let raw = data.slides;
+            try { if(typeof raw === 'string') raw = JSON.parse(raw); } catch(e) {}
+            arSlides = (Array.isArray(raw) && raw.length > 0 && raw[0].t) ? raw : [
+                { t: 'Hana Memoria ✨', b: 'Kenangan manis ini dihidupkan kembali khusus untukmu.' }
+            ];
+            arSlideIdx = 0;
+            arVideoSrc = data.link_video || null;
+            const v = document.getElementById('ar-video-el');
+            if (v && arVideoSrc) { v.src = arVideoSrc; }
+        }
+
+        function showMascotStage() {
+            const stage = document.getElementById('ar-mascot-stage');
+            stage.classList.add('active');
+            setTimeout(() => {
+                const wrap = document.getElementById('mascot-wrap');
+                wrap.classList.add('entered');
+                setTimeout(() => openBubble(), 700);
+            }, 80);
+        }
+
+        function hideMascotStage() {
+            const stage = document.getElementById('ar-mascot-stage');
+            stage.classList.remove('active');
+            const wrap = document.getElementById('mascot-wrap');
+            wrap.classList.remove('entered');
+            wrap.style.opacity = '0';
+            closeBubble();
+            closeVideoPanel();
+            setTimeout(() => { wrap.style.opacity = ''; }, 100);
+        }
+
+        function openBubble() {
+            arSlideIdx = 0;
+            updateBubble();
+            document.getElementById('speech-bubble').classList.add('show');
+            document.getElementById('mascot-tap-hint').classList.add('hidden');
+            bubbleOpen = true;
+        }
+
+        function closeBubble() {
+            document.getElementById('speech-bubble').classList.remove('show');
+            document.getElementById('mascot-tap-hint').classList.remove('hidden');
+            bubbleOpen = false;
+        }
+
+        function updateBubble() {
+            if(arSlides.length > 0) {
+                document.getElementById('bubble-slide-title').innerText = arSlides[arSlideIdx].t || "";
+                document.getElementById('bubble-slide-body').innerText = arSlides[arSlideIdx].b || "";
+                document.getElementById('bubble-next-btn').innerText = (arSlideIdx === arSlides.length - 1) ? "TUTUP ×" : "LANJUT ›";
+            }
+        }
+
+        window.onBubbleNext = function(e) {
+            e.stopPropagation();
+            if(arSlideIdx < arSlides.length - 1) {
+                arSlideIdx++;
+                updateBubble();
+            } else {
+                closeBubble();
+            }
+        };
+
+        window.onMascotTap = function() {
+            if (bubbleOpen) { closeBubble(); } else { openBubble(); }
+        };
+
+        window.onHeartTap = function(e) {
+            e.stopPropagation();
+            openVideoPanel();
+        };
+
+        function openVideoPanel() {
+            const panel = document.getElementById('video-panel');
+            panel.classList.add('show');
+            const v = document.getElementById('ar-video-el');
+            if (v) v.play();
+            closeBubble();
+        }
+
+        window.closeVideoPanel = function() {
+            const panel = document.getElementById('video-panel');
+            panel.classList.remove('show');
+            const v = document.getElementById('ar-video-el');
+            if (v) { v.pause(); v.currentTime = 0; }
+        };
+
+        let isPreviewMode = false;
+        window.toggleMascotPreview = function() {
+            if (isPreviewMode) { closeMascotPreview(); return; }
+            isPreviewMode = true;
+            const stage = document.getElementById('ar-mascot-stage');
+            stage.classList.add('active', 'preview-mode');
+            const arContainer = document.getElementById('mindar-overlay-container');
+            if (arContainer) arContainer.style.visibility = 'hidden';
+            const tutOverlay = document.getElementById('tutorial-overlay');
+            if (tutOverlay) tutOverlay.style.opacity = '0';
+            const wrap = document.getElementById('mascot-wrap');
+            wrap.classList.add('entered');
+            setTimeout(() => openBubble(), 700);
+        };
+
+        window.closeMascotPreview = function() {
+            isPreviewMode = false;
+            const stage = document.getElementById('ar-mascot-stage');
+            stage.classList.remove('active', 'preview-mode');
+            const arContainer = document.getElementById('mindar-overlay-container');
+            if (arContainer) arContainer.style.visibility = 'visible';
+            const tutOverlay = document.getElementById('tutorial-overlay');
+            if (tutOverlay) tutOverlay.style.opacity = '1';
+            hideMascotStage();
+        };
+
+        function onWindowResize() {
+            if(camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.position.z = isMobile() ? 20 : 15;
+                if(particleMaterial) particleMaterial.uniforms.uSizeMultiplier.value = isMobile() ? 4.0 : 2.0;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
     </script>
 </body>
 </html>
