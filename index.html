@@ -547,7 +547,7 @@
                 document.getElementById('message-card').classList.add('show');
             } else {
                 try {
-                    const res = await fetch(`${SUPABASE_URL}/rest/v1/Pesanan?id_pesanan=eq.${idPelanggan}`, {
+                    const res = await fetch(`${SUPABASE_URL}/rest/v1/Pesanan?id_pesanan=eq.${idPelanggan}&select=link_target,link_video,slides,video_posisi,video_skala,video_rotasi,nama_pelanggan,jenis_pesanan,jumlah`, {
                         headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
                     });
                     if (!res.ok) throw new Error("Gagal akses database");
